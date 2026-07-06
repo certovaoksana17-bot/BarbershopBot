@@ -6,7 +6,7 @@ const action = process.argv[2] || 'set';
 const apiBase = `https://api.telegram.org/bot${BOT_TOKEN}`;
 
 async function setWebhook() {
-  const body = { url: getWebhookUrl() };
+  const body = { url: getWebhookUrl(), drop_pending_updates: true };
   if (WEBHOOK_SECRET) body.secret_token = WEBHOOK_SECRET;
   const res = await fetch(`${apiBase}/setWebhook`, {
     method: 'POST',
@@ -19,7 +19,11 @@ async function setWebhook() {
 }
 
 async function deleteWebhook() {
-  const res = await fetch(`${apiBase}/deleteWebhook`, { method: 'POST' });
+  const res = await fetch(`${apiBase}/deleteWebhook`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ drop_pending_updates: true }),
+  });
   const data = await res.json();
   if (!data.ok) throw new Error(data.description);
   console.log('[Webhook] Deleted');

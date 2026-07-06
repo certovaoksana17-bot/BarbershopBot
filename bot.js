@@ -3,6 +3,7 @@
 
 import { Telegraf, session, Markup } from 'telegraf';
 import { Redis } from '@telegraf/session/redis';
+import { createClient } from 'redis';
 import { message } from 'telegraf/filters';
 import { BOT_TOKEN, REDIS_URL, MASTERS, ADMIN_SECRET_CODE, SCENES } from './config.js';
 import { stage } from './scenes/index.js';
@@ -10,7 +11,22 @@ import { askGroq } from './services/groq.js';
 import { resetBooking } from './scenes/helpers.js';
 import { handleStart, handleSettings, handleMasterLogin } from './handlers/commands.js';
 
-const store = Redis({ url: REDIS_URL });
+const redisClient = createClient({ url: REDIS_URL });
+redisClient.on('error', (err) => console.error('[Redis] Client error:', err.message));
+
+const store = Redis({ client: redisClient });
+let redisReadyPromise = null;
+
+export async function ensureRedisReady() {
+  if (redisClient.isOpen) return;
+  if (!redisReadyPromise) {
+    redisReadyPromise = redisClient.connect().catch((err) => {
+      redisReadyPromise = null;
+      throw err;
+    });
+  }
+  await redisReadyPromise;
+}
 
 export const bot = new Telegraf(BOT_TOKEN);
 
@@ -57,4 +73,5 @@ bot.action('start_booking', async (ctx) => {
 
 bot.catch((err, ctx) => {
   console.error(`[Bot] Error update ${ctx.update?.update_id}:`, err);
+  if (process.env.BOT_MODE !== 'polling') throw err;
 });
