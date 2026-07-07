@@ -9,8 +9,17 @@ import {
   markVacation,
   SheetsError,
 } from '../services/bookingService.js';
-import { isValidDateInput } from '../utils/validation.js';
+import { parseVacationDates } from '../services/groq.js';
 import { registerGlobalCommands } from './helpers.js';
+
+const VACATION_HINT =
+  'Укажите выходной датой или фразой.\n\n' +
+  'Примеры:\n' +
+  '• 2026-07-15\n' +
+  '• выходной с 1 июня по 3 июня\n' +
+  '• завтра и послезавтра\n' +
+  '• в этот четверг\n\n' +
+  'Отмена — слово «отмена».';
 
 export const masterMenuScene = new Scenes.BaseScene(SCENES.MASTER_MENU);
 registerGlobalCommands(masterMenuScene);
@@ -51,7 +60,7 @@ masterMenuScene.hears('📅 Моё расписание', async (ctx) => {
 });
 
 masterMenuScene.hears('🏖 Отметить выходной', async (ctx) => {
-  await ctx.reply('Введите дату выходного в формате ГГГГ-ММ-ДД (например, 2026-07-15):');
+  await ctx.reply(VACATION_HINT);
   return ctx.scene.enter(SCENES.MASTER_VACATION_DATE);
 });
 
@@ -88,28 +97,61 @@ export const masterVacationScene = new Scenes.BaseScene(SCENES.MASTER_VACATION_D
 registerGlobalCommands(masterVacationScene);
 
 masterVacationScene.enter(async (ctx) => {
-  await ctx.reply('Дата выходного (ГГГГ-ММ-ДД):');
+  await ctx.reply(VACATION_HINT);
 });
 
-masterVacationScene.on(message('text'), async (ctx, next) => {
-  const date = ctx.message.text.trim();
-  if (date.startsWith('/')) return next();
-  if (!isValidDateInput(date)) {
-    return ctx.reply('Неверный формат. Пример: 2026-07-15');
-  }
-
+async function applyVacationDates(ctx, dates) {
   const master = findMasterById(ctx.session.masterId);
-  if (!master) return ctx.reply('Сессия мастера не найдена.');
-
-  try {
-    await markVacation(master.name, date);
-    await ctx.reply(`Выходной на ${date} отмечен во всех слотах.`, masterMenuKeyboard);
-    return ctx.scene.enter(SCENES.MASTER_MENU);
-  } catch (err) {
-    console.error('[Master] vacation error:', err.message);
-    await ctx.reply(err instanceof SheetsError ? err.message : 'Не удалось отметить выходной.');
+  if (!master) {
+    await ctx.reply('Сессия мастера не найдена.');
     return ctx.scene.enter(SCENES.MASTER_MENU);
   }
+
+  const marked = [];
+  const failed = [];
+
+  for (const date of dates) {
+    try {
+      await markVacation(master.name, date);
+      marked.push(date);
+    } catch (err) {
+      console.error('[Master] vacation error:', date, err.message);
+      failed.push({ date, message: err instanceof SheetsError ? err.message : 'ошибка' });
+    }
+  }
+
+  if (!marked.length) {
+    const reason = failed[0]?.message || 'Не удалось отметить выходной.';
+    await ctx.reply(reason, masterMenuKeyboard);
+    return ctx.scene.enter(SCENES.MASTER_MENU);
+  }
+
+  const markedText = marked.map((d) => `• ${d}`).join('\n');
+  let reply = `Выходной отмечен:\n${markedText}`;
+  if (failed.length) {
+    const failedText = failed.map((f) => `• ${f.date}: ${f.message}`).join('\n');
+    reply += `\n\nНе удалось отметить:\n${failedText}`;
+  }
+  await ctx.reply(reply, masterMenuKeyboard);
+  return ctx.scene.enter(SCENES.MASTER_MENU);
+}
+
+masterVacationScene.on(message('text'), async (ctx, next) => {
+  const text = ctx.message.text.trim();
+  if (text.startsWith('/')) return next();
+
+  await ctx.sendChatAction('typing');
+  const parsed = await parseVacationDates(text);
+
+  if (parsed.cancel) {
+    await ctx.reply('Отменено.', masterMenuKeyboard);
+    return ctx.scene.enter(SCENES.MASTER_MENU);
+  }
+  if (!parsed.ok) {
+    return ctx.reply(`${parsed.error}\n\n${VACATION_HINT}`);
+  }
+
+  return applyVacationDates(ctx, parsed.dates);
 });
 
 export const masterScenes = [masterMenuScene, masterVacationScene];

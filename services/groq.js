@@ -2,6 +2,13 @@
 
 import Groq from 'groq-sdk';
 import { GROQ_API_KEY, GROQ_MODEL, SERVICES } from '../config.js';
+import {
+  getSalonToday,
+  getWeekdayName,
+  normalizeVacationDates,
+  parseLocalVacationDates,
+} from '../utils/dates.js';
+import { isValidDateInput } from '../utils/validation.js';
 
 const client = GROQ_API_KEY ? new Groq({ apiKey: GROQ_API_KEY }) : null;
 
@@ -203,4 +210,104 @@ export async function askGroq(userMessage) {
     console.error('[Groq] API error:', err.message);
     return { intent: 'OTHER', reply: FALLBACK_REPLY };
   }
+}
+
+function parseGroqJson(raw) {
+  const text = String(raw || '').trim();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    const objectMatch = text.match(/\{[\s\S]*\}/);
+    if (objectMatch) {
+      try {
+        return JSON.parse(objectMatch[0]);
+      } catch {
+        return null;
+      }
+    }
+    const arrayMatch = text.match(/\[[\s\S]*\]/);
+    if (arrayMatch) {
+      try {
+        return { dates: JSON.parse(arrayMatch[0]) };
+      } catch {
+        return null;
+      }
+    }
+  }
+  return null;
+}
+
+function buildVacationPrompt(referenceDate) {
+  const weekday = getWeekdayName(referenceDate);
+  const year = referenceDate.slice(0, 4);
+  return `Ты разбираешь русские фразы о выходных днях мастера в конкретные даты.
+
+Сегодня: ${referenceDate} (${weekday}).
+Часовой пояс салона: UTC+5.
+Текущий год по умолчанию: ${year}.
+
+Верни ТОЛЬКО JSON без пояснений:
+{"dates":["YYYY-MM-DD",...]}
+или {"cancel":true}
+или {"error":"краткая причина"}
+
+Правила:
+- Разворачивай диапазоны включительно: «с 1 июня по 3 июня» → все дни между датами.
+- «завтра» = +1 день от сегодня, «послезавтра» = +2 дня.
+- «в этот четверг» / «в пятницу» = ближайший такой день (сегодня или позже).
+- Если год не указан — используй ${year}.
+- Только даты сегодня или в будущем.
+- Не больше 62 дат в массиве.
+- Если фраза не про даты выходного — верни {"error":"..."}.
+
+Примеры:
+«выходной с 1 июня по 3 июня» → {"dates":["${year}-06-01","${year}-06-02","${year}-06-03"]}
+«завтра и послезавтра» → две даты подряд после сегодня
+«в этот четверг» → ближайший четверг`;
+}
+
+async function parseVacationDatesWithGroq(userMessage, referenceDate) {
+  if (!client) {
+    return { ok: false, error: 'ИИ для разбора дат недоступен. Укажите дату в формате ГГГГ-ММ-ДД.' };
+  }
+
+  try {
+    const completion = await client.chat.completions.create({
+      model: GROQ_MODEL,
+      messages: [
+        { role: 'system', content: buildVacationPrompt(referenceDate) },
+        { role: 'user', content: userMessage },
+      ],
+      max_tokens: 300,
+      temperature: 0,
+    });
+
+    const parsed = parseGroqJson(completion.choices[0]?.message?.content);
+    if (!parsed) {
+      return { ok: false, error: 'Не удалось распознать даты. Попробуйте иначе или укажите ГГГГ-ММ-ДД.' };
+    }
+    if (parsed.cancel) return { cancel: true };
+    if (parsed.error) return { ok: false, error: String(parsed.error) };
+
+    const rawDates = Array.isArray(parsed.dates) ? parsed.dates.map(String) : [];
+    return normalizeVacationDates(rawDates, referenceDate);
+  } catch (err) {
+    console.error('[Groq] vacation parse error:', err.message);
+    return { ok: false, error: 'Ошибка разбора дат. Укажите дату в формате ГГГГ-ММ-ДД.' };
+  }
+}
+
+export async function parseVacationDates(userMessage) {
+  const text = String(userMessage || '').trim();
+  if (!text) return { ok: false, error: 'Введите дату или период выходного.' };
+  if (CANCEL_RE.test(text)) return { cancel: true };
+
+  const today = getSalonToday();
+  const localDates = parseLocalVacationDates(text, today);
+  if (localDates) return normalizeVacationDates(localDates, today);
+
+  if (isValidDateInput(text)) return normalizeVacationDates([text], today);
+
+  return parseVacationDatesWithGroq(text, today);
 }
