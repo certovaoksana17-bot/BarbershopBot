@@ -31,15 +31,14 @@ export async function handleStart(ctx) {
   }
 
   resetBooking(ctx);
-  ctx.session.assistantMode = false;
+  ctx.session.assistantMode = true;
   ctx.session.assistantHistory = [];
   await ctx.reply(
     'Добро пожаловать в парикмахерскую «Ножницы и Ко»! ✂️\n\n' +
-      'Помогу записаться на услугу за пару минут.\n' +
-      'Сначала выберите мастера — если есть вопрос, просто напишите его в чат.',
-    Markup.removeKeyboard()
+      'Сейчас работает режим ассистента: просто напиши вопрос сообщением, и я отвечу по базе знаний.\n' +
+      'Если хочешь оформить запись, нажми кнопку ниже.',
+    Markup.inlineKeyboard([[Markup.button.callback('📝 Записаться', 'start_booking')]])
   );
-  return ctx.scene.enter(SCENES.SELECT_MASTER);
 }
 
 export async function handleSettings(ctx) {

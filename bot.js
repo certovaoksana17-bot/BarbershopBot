@@ -96,6 +96,8 @@ bot.on(message('text'), async (ctx, next) => {
 bot.action('start_booking', async (ctx) => {
   await ctx.answerCbQuery();
   resetBooking(ctx);
+  ctx.session.assistantMode = false;
+  ctx.session.assistantHistory = [];
   return ctx.scene.enter(SCENES.SELECT_MASTER);
 });
 
