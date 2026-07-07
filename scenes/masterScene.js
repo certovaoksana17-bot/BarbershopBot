@@ -35,10 +35,6 @@ const masterMenuKeyboard = Markup.keyboard([
   ['🚪 Выйти'],
 ]).resize();
 
-const masterMenuInline = Markup.inlineKeyboard([
-  [Markup.button.callback('💰 Мои услуги', 'msvc_open')],
-]);
-
 async function exitMasterCabinet(ctx) {
   ctx.session.role = 'client';
   ctx.session.masterId = null;
@@ -48,17 +44,7 @@ async function exitMasterCabinet(ctx) {
 
 masterMenuScene.enter(async (ctx) => {
   const master = findMasterById(ctx.session.masterId);
-  await ctx.reply(
-    `Кабинет мастера: ${master?.name || 'Мастер'}\n\n` +
-      'Меню:\n' +
-      '• 📅 Моё расписание\n' +
-      '• 🏖 Отметить выходной\n' +
-      '• 💰 Мои услуги — цены и список услуг\n' +
-      '• 📋 Записи на сегодня\n' +
-      '• 🚪 Выйти',
-    masterMenuKeyboard
-  );
-  await ctx.reply('Или нажмите кнопку ниже:', masterMenuInline);
+  await ctx.reply(`Кабинет мастера: ${master?.name || 'Мастер'}`, masterMenuKeyboard);
 });
 
 masterMenuScene.hears('📅 Моё расписание', async (ctx) => {
@@ -206,11 +192,6 @@ async function showMasterServices(ctx) {
 }
 
 masterMenuScene.hears('💰 Мои услуги', async (ctx) => showMasterServices(ctx));
-
-masterMenuScene.action('msvc_open', async (ctx) => {
-  await ctx.answerCbQuery();
-  return showMasterServices(ctx);
-});
 
 masterMenuScene.action('msvc_add', async (ctx) => {
   await ctx.answerCbQuery();
