@@ -3,7 +3,7 @@
 import { Markup } from 'telegraf';
 import { message } from 'telegraf/filters';
 import { SCENES } from '../config.js';
-import { handleStart, handleSettings } from '../handlers/commands.js';
+import { handleAssistant, handleStart, handleSettings } from '../handlers/commands.js';
 import { askGroq } from '../services/groq.js';
 import { looksLikeQuestion } from '../utils/validation.js';
 
@@ -13,6 +13,7 @@ export const restartKeyboard = Markup.keyboard([[RESTART_TEXT]]).resize();
 
 export function registerGlobalCommands(scene) {
   scene.command('start', handleStart);
+  scene.command('assistant', handleAssistant);
   scene.command('settings', handleSettings);
 }
 

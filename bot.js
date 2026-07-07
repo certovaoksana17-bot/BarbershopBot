@@ -43,6 +43,7 @@ bot.start(handleStart);
 bot.command('assistant', handleAssistant);
 bot.command('settings', handleSettings);
 bot.command('my_bookings', showClientBookings);
+bot.hears(/^\/assistant(@\w+)?$/i, handleAssistant);
 
 bot.action(/^booking_confirm:(.+)$/, async (ctx) => handleBookingConfirm(ctx, ctx.match[1]));
 bot.action(/^booking_cancel:(.+)$/, async (ctx) => handleBookingCancel(ctx, ctx.match[1]));
