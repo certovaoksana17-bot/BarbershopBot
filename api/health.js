@@ -1,8 +1,11 @@
 // Quick env check for Vercel (does not expose secret values).
 
+const APP_VERSION = 'ef05230';
+
 export default function handler(_req, res) {
   return res.status(200).json({
     ok: true,
+    version: APP_VERSION,
     env: {
       BOT_TOKEN: Boolean(process.env.BOT_TOKEN),
       REDIS_URL: Boolean(process.env.REDIS_URL),
