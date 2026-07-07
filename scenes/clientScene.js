@@ -1,8 +1,9 @@
-// Client FSM: START → SELECT_SERVICE → GET_NAME → GET_SURNAME → GET_PHONE → SELECT_MASTER → SHOW_SLOTS → CONFIRM_BOOKING
+// Client FSM: SELECT_MASTER → SELECT_SERVICE → GET_NAME → GET_SURNAME → GET_PHONE → SHOW_SLOTS → CONFIRM_BOOKING
 
 import { Scenes, Markup } from 'telegraf';
 import { message } from 'telegraf/filters';
-import { SCENES, SERVICES, MASTERS } from '../config.js';
+import { SCENES, MASTERS } from '../config.js';
+import { getMasterServices } from '../services/catalogService.js';
 import {
   RESTART_TEXT,
   registerRestart,
@@ -22,29 +23,71 @@ import {
 import { getAvailableSlots, sendBookingToSheets, isSlotAvailable, SheetsError } from '../services/bookingService.js';
 import { notifyMasterAboutBooking } from '../services/notificationService.js';
 
+// --- SELECT_MASTER ---
+export const selectMasterScene = new Scenes.BaseScene(SCENES.SELECT_MASTER);
+registerGlobalCommands(selectMasterScene);
+
+selectMasterScene.enter(async (ctx) => {
+  ctx.session.booking = ctx.session.booking || {};
+  ctx.session.role = 'client';
+  await ctx.reply('Выберите мастера 👇', restartKeyboard);
+  await ctx.reply(
+    'Наши мастера:',
+    Markup.inlineKeyboard([
+      ...MASTERS.map((m) => [Markup.button.callback(m.name, `master:${m.id}`)]),
+      [Markup.button.callback('🔄 Начать заново', 'restart')],
+    ])
+  );
+});
+
+selectMasterScene.action(/^master:(.+)$/, async (ctx) => {
+  const master = MASTERS.find((m) => m.id === ctx.match[1]);
+  if (!master) return ctx.answerCbQuery('Мастер не найден');
+  ctx.session.booking.masterId = master.id;
+  ctx.session.booking.masterName = master.name;
+  await ctx.answerCbQuery();
+  await ctx.reply(`Мастер: ${master.name} ✂️`);
+  return ctx.scene.enter(SCENES.SELECT_SERVICE);
+});
+
+registerRestart(selectMasterScene);
+registerAiFallback(selectMasterScene);
+
 // --- SELECT_SERVICE ---
 export const selectServiceScene = new Scenes.BaseScene(SCENES.SELECT_SERVICE);
 registerGlobalCommands(selectServiceScene);
 
 selectServiceScene.enter(async (ctx) => {
-  ctx.session.booking = ctx.session.booking || {};
-  ctx.session.role = 'client';
+  const masterName = ctx.session.booking?.masterName;
+  if (!masterName) return ctx.scene.enter(SCENES.SELECT_MASTER);
+
+  await ctx.reply('Загружаю услуги...');
+  const services = await getMasterServices(masterName);
+  ctx.session.masterServices = services;
+
+  if (!services.length) {
+    await ctx.reply('У этого мастера пока нет услуг. Выберите другого мастера.');
+    return ctx.scene.enter(SCENES.SELECT_MASTER);
+  }
+
   await ctx.reply('Выберите услугу 👇', restartKeyboard);
   await ctx.reply(
-    'Наши услуги:',
+    `Услуги мастера ${masterName}:`,
     Markup.inlineKeyboard(
-      SERVICES.map((s) => [Markup.button.callback(`${s.name} — ${s.price} ₽`, `service:${s.id}`)])
+      services.map((s) => [Markup.button.callback(`${s.name} — ${s.price} ₽`, `service:${s.id}`)])
     )
   );
 });
 
 selectServiceScene.action(/^service:(.+)$/, async (ctx) => {
-  const service = SERVICES.find((s) => s.id === ctx.match[1]);
+  const services = ctx.session.masterServices || [];
+  const service = services.find((s) => s.id === ctx.match[1]);
   if (!service) return ctx.answerCbQuery('Услуга не найдена');
   ctx.session.booking.serviceId = service.id;
   ctx.session.booking.service = service.name;
+  ctx.session.booking.price = service.price;
   await ctx.answerCbQuery();
-  await ctx.reply(`Вы выбрали: ${service.name} ✂️`);
+  await ctx.reply(`Вы выбрали: ${service.name} — ${service.price} ₽ ✂️`);
   return ctx.scene.enter(SCENES.GET_NAME);
 });
 
@@ -121,7 +164,7 @@ getPhoneScene.on(message('contact'), async (ctx) => {
   if (!savePhone(ctx, ctx.message.contact.phone_number)) {
     return ctx.reply('Не удалось распознать номер. Введите вручную: +79XXXXXXXXX');
   }
-  return ctx.scene.enter(SCENES.SELECT_MASTER);
+  return ctx.scene.enter(SCENES.SHOW_SLOTS);
 });
 
 getPhoneScene.on(message('text'), async (ctx, next) => {
@@ -131,37 +174,10 @@ getPhoneScene.on(message('text'), async (ctx, next) => {
   if (!savePhone(ctx, text)) {
     return ctx.reply('Неверный формат. Пример: +79991234567');
   }
-  return ctx.scene.enter(SCENES.SELECT_MASTER);
-});
-
-getPhoneScene.on('message', (ctx) => ctx.reply('Отправьте телефон текстом или через кнопку контакта.'));
-
-// --- SELECT_MASTER ---
-export const selectMasterScene = new Scenes.BaseScene(SCENES.SELECT_MASTER);
-registerGlobalCommands(selectMasterScene);
-
-selectMasterScene.enter(async (ctx) => {
-  await ctx.reply(
-    'Выберите мастера 👇',
-    Markup.inlineKeyboard([
-      ...MASTERS.map((m) => [Markup.button.callback(m.name, `master:${m.id}`)]),
-      [Markup.button.callback('🔄 Начать заново', 'restart')],
-    ])
-  );
-});
-
-selectMasterScene.action(/^master:(.+)$/, async (ctx) => {
-  const master = MASTERS.find((m) => m.id === ctx.match[1]);
-  if (!master) return ctx.answerCbQuery('Мастер не найден');
-  ctx.session.booking.masterId = master.id;
-  ctx.session.booking.masterName = master.name;
-  await ctx.answerCbQuery();
-  await ctx.reply(`Мастер: ${master.name} ✂️`);
   return ctx.scene.enter(SCENES.SHOW_SLOTS);
 });
 
-registerRestart(selectMasterScene);
-registerAiFallback(selectMasterScene);
+getPhoneScene.on('message', (ctx) => ctx.reply('Отправьте телефон текстом или через кнопку контакта.'));
 
 // --- SHOW_SLOTS ---
 export const showSlotsScene = new Scenes.BaseScene(SCENES.SHOW_SLOTS);
@@ -176,7 +192,7 @@ showSlotsScene.enter(async (ctx) => {
     ctx.session.availableSlots = slots;
 
     if (!slots.length) {
-      await ctx.reply('Свободных слотов у этого мастера сейчас нет. Выберите другого мастера или попробуйте позже.');
+      await ctx.reply('Свободных слотов у этого мастера сейчас нет. Попробуйте позже или выберите другого мастера.');
       return ctx.scene.enter(SCENES.SELECT_MASTER);
     }
 
@@ -243,7 +259,7 @@ confirmBookingScene.enter(async (ctx) => {
   const b = ctx.session.booking;
   await ctx.reply(
     'Проверьте данные записи:\n\n' +
-      `💇 Услуга: ${b.service}\n` +
+      `💇 Услуга: ${b.service}${b.price ? ` — ${b.price} ₽` : ''}\n` +
       `✂️ Мастер: ${b.masterName}\n` +
       `👤 Клиент: ${b.name} ${b.surname}\n` +
       `📱 Телефон: ${b.phone}\n` +
@@ -279,6 +295,7 @@ confirmBookingScene.action('confirm', async (ctx) => {
       surname: b.surname,
       phone: b.phone,
       service: b.service,
+      price: b.price,
       time: b.time,
       date: b.date,
       userId: b.userId,
@@ -318,11 +335,11 @@ registerRestart(confirmBookingScene);
 registerAiFallback(confirmBookingScene);
 
 export const clientScenes = [
+  selectMasterScene,
   selectServiceScene,
   getNameScene,
   getSurnameScene,
   getPhoneScene,
-  selectMasterScene,
   showSlotsScene,
   confirmBookingScene,
 ];

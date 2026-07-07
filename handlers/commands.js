@@ -33,9 +33,9 @@ export async function handleStart(ctx) {
   await ctx.reply(
     'Добро пожаловать в парикмахерскую «Ножницы и Ко»! ✂️\n\n' +
       'Помогу записаться на услугу за пару минут.\n' +
-      'Выберите услугу ниже — если есть вопрос, просто напишите его в чат.'
+      'Сначала выберите мастера — если есть вопрос, просто напишите его в чат.'
   );
-  return ctx.scene.enter(SCENES.SELECT_SERVICE);
+  return ctx.scene.enter(SCENES.SELECT_MASTER);
 }
 
 export async function handleSettings(ctx) {

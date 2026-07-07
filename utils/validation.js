@@ -124,6 +124,15 @@ export function formatSlotLabel(date, time) {
   return `${date} в ${normalizedTime}`;
 }
 
+/** Returns true if booking can be cancelled/modified (default: 2 hours before). */
+export function canModifyBooking(date, time, minHours = 2, utcOffsetHours = BOOKING_UTC_OFFSET) {
+  const [y, m, d] = String(date).split('-').map(Number);
+  const [hh, mm] = normalizeTime(time).split(':').map(Number);
+  if (!y || !m || !d || Number.isNaN(hh) || Number.isNaN(mm)) return false;
+  const slotUtc = Date.UTC(y, m - 1, d, hh - utcOffsetHours, mm, 0);
+  return slotUtc - Date.now() >= minHours * 3600000;
+}
+
 /** Returns true if slot start time is already in the past (salon timezone). */
 export function isSlotInPast(date, time, utcOffsetHours = BOOKING_UTC_OFFSET) {
   const [y, m, d] = String(date).split('-').map(Number);

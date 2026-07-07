@@ -7,6 +7,9 @@ import {
   getMasterSchedule,
   getTodayBookings,
   markVacation,
+  getMasterServicesFromSheets,
+  saveMasterService,
+  deleteMasterService,
   SheetsError,
 } from '../services/bookingService.js';
 import { parseVacationDates } from '../services/groq.js';
@@ -26,7 +29,8 @@ registerGlobalCommands(masterMenuScene);
 
 const masterMenuKeyboard = Markup.keyboard([
   ['📅 Моё расписание', '🏖 Отметить выходной'],
-  ['📋 Записи на сегодня', '🚪 Выйти'],
+  ['💰 Мои услуги', '📋 Записи на сегодня'],
+  ['🚪 Выйти'],
 ]).resize();
 
 masterMenuScene.enter(async (ctx) => {
@@ -154,4 +158,110 @@ masterVacationScene.on(message('text'), async (ctx, next) => {
   return applyVacationDates(ctx, parsed.dates);
 });
 
-export const masterScenes = [masterMenuScene, masterVacationScene];
+async function showMasterServices(ctx) {
+  const master = findMasterById(ctx.session.masterId);
+  if (!master) return ctx.reply('Сессия мастера не найдена.');
+
+  try {
+    const services = await getMasterServicesFromSheets(master.name);
+    if (!services.length) {
+      await ctx.reply('Услуг пока нет. Добавьте первую услугу.');
+    } else {
+      const lines = services.map((s) => `• ${s.name} — ${s.price} ₽`).join('\n');
+      await ctx.reply(`Ваши услуги:\n\n${lines}`);
+    }
+
+    await ctx.reply(
+      'Управление услугами:',
+      Markup.inlineKeyboard([
+        ...services.map((s) => [
+          Markup.button.callback(`✏️ ${s.name}`, `msvc_edit:${s.id}`),
+          Markup.button.callback('🗑', `msvc_del:${s.id}`),
+        ]),
+        [Markup.button.callback('➕ Добавить услугу', 'msvc_add')],
+        [Markup.button.callback('◀️ В меню', 'msvc_back')],
+      ])
+    );
+  } catch (err) {
+    await ctx.reply(err instanceof SheetsError ? err.message : 'Не удалось загрузить услуги.');
+  }
+}
+
+masterMenuScene.hears('💰 Мои услуги', async (ctx) => showMasterServices(ctx));
+
+masterMenuScene.action('msvc_add', async (ctx) => {
+  await ctx.answerCbQuery();
+  ctx.session.serviceDraft = { step: 'name' };
+  await ctx.reply('Введите название новой услуги:');
+  return ctx.scene.enter(SCENES.MASTER_SERVICE_EDIT);
+});
+
+masterMenuScene.action(/^msvc_edit:(.+)$/, async (ctx) => {
+  await ctx.answerCbQuery();
+  const master = findMasterById(ctx.session.masterId);
+  const services = await getMasterServicesFromSheets(master.name);
+  const service = services.find((s) => s.id === ctx.match[1]);
+  if (!service) return ctx.reply('Услуга не найдена.');
+  ctx.session.serviceDraft = { step: 'price', serviceId: service.id, name: service.name };
+  await ctx.reply(`Новая цена для «${service.name}» (в рублях):`);
+  return ctx.scene.enter(SCENES.MASTER_SERVICE_EDIT);
+});
+
+masterMenuScene.action(/^msvc_del:(.+)$/, async (ctx) => {
+  await ctx.answerCbQuery();
+  const master = findMasterById(ctx.session.masterId);
+  try {
+    await deleteMasterService({ masterName: master.name, serviceId: ctx.match[1] });
+    await ctx.reply('Услуга удалена.');
+    return showMasterServices(ctx);
+  } catch (err) {
+    await ctx.reply(err instanceof SheetsError ? err.message : 'Не удалось удалить услугу.');
+  }
+});
+
+masterMenuScene.action('msvc_back', async (ctx) => {
+  await ctx.answerCbQuery();
+  return ctx.scene.enter(SCENES.MASTER_MENU);
+});
+
+export const masterServiceEditScene = new Scenes.BaseScene(SCENES.MASTER_SERVICE_EDIT);
+registerGlobalCommands(masterServiceEditScene);
+
+masterServiceEditScene.on(message('text'), async (ctx, next) => {
+  const text = ctx.message.text.trim();
+  if (text.startsWith('/')) return next();
+  const draft = ctx.session.serviceDraft || {};
+  const master = findMasterById(ctx.session.masterId);
+  if (!master) return ctx.reply('Сессия мастера не найдена.');
+
+  if (draft.step === 'name') {
+    if (text.length < 2) return ctx.reply('Название слишком короткое.');
+    ctx.session.serviceDraft = { ...draft, step: 'price', name: text };
+    return ctx.reply('Введите цену в рублях (только число):');
+  }
+
+  const price = Number(text.replace(/\s/g, ''));
+  if (!Number.isFinite(price) || price <= 0) {
+    return ctx.reply('Введите корректную цену, например: 1500');
+  }
+
+  try {
+    await saveMasterService({
+      masterName: master.name,
+      serviceId: draft.serviceId,
+      name: draft.name,
+      price,
+    });
+    ctx.session.serviceDraft = null;
+    await ctx.reply(`Сохранено: ${draft.name} — ${price} ₽`, masterMenuKeyboard);
+    return ctx.scene.enter(SCENES.MASTER_MENU);
+  } catch (err) {
+    await ctx.reply(err instanceof SheetsError ? err.message : 'Не удалось сохранить услугу.');
+  }
+});
+
+export const masterScenes = [
+  masterMenuScene,
+  masterVacationScene,
+  masterServiceEditScene,
+];

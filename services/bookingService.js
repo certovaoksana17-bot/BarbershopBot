@@ -72,10 +72,55 @@ export async function sendBookingToSheets(data) {
     surname: data.surname,
     phone: data.phone,
     service: data.service,
+    price: data.price,
     time: data.time,
     date: data.date,
     userId: data.userId,
   });
+}
+
+export async function getMasterServicesFromSheets(masterName) {
+  const result = await callSheets({ action: 'get_services', masterName }, { method: 'GET' });
+  return result.services || [];
+}
+
+export async function saveMasterService({ masterName, serviceId, name, price }) {
+  return callSheets({ action: 'save_service', masterName, serviceId, name, price });
+}
+
+export async function deleteMasterService({ masterName, serviceId }) {
+  return callSheets({ action: 'delete_service', masterName, serviceId });
+}
+
+export async function getClientBookings(userId) {
+  const result = await callSheets({ action: 'get_client_bookings', userId }, { method: 'GET' });
+  return result.bookings || [];
+}
+
+export async function cancelBooking({ bookingId, userId }) {
+  return callSheets({ action: 'cancel_booking', bookingId, userId });
+}
+
+export async function confirmBooking({ bookingId, userId }) {
+  return callSheets({ action: 'confirm_booking', bookingId, userId });
+}
+
+export async function releaseBooking(bookingId) {
+  return callSheets({ action: 'release_booking', bookingId });
+}
+
+export async function getReminderBookings() {
+  const result = await callSheets({ action: 'get_reminder_bookings' }, { method: 'GET' });
+  return result.bookings || [];
+}
+
+export async function getUnconfirmedBookings() {
+  const result = await callSheets({ action: 'get_unconfirmed_bookings' }, { method: 'GET' });
+  return result.bookings || [];
+}
+
+export async function markReminderSent(bookingId) {
+  return callSheets({ action: 'mark_reminder_sent', bookingId });
 }
 
 export async function getAvailableSlots(masterName, date) {

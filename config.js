@@ -16,6 +16,7 @@ export const WEBHOOK_DOMAIN = process.env.WEBHOOK_DOMAIN || process.env.VERCEL_U
 export const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
 export const BOT_MODE = process.env.BOT_MODE || 'webhook';
 export const BOOKING_UTC_OFFSET = Number(process.env.BOOKING_UTC_OFFSET ?? 5);
+export const CRON_SECRET = process.env.CRON_SECRET;
 
 if (!BOT_TOKEN) throw new Error('BOT_TOKEN is not set');
 if (!REDIS_URL) throw new Error('REDIS_URL is not set — Vercel serverless requires Redis sessions');
@@ -37,6 +38,8 @@ export const SCENES = {
   CONFIRM_BOOKING: 'CONFIRM_BOOKING',
   MASTER_MENU: 'MASTER_MENU',
   MASTER_VACATION_DATE: 'MASTER_VACATION_DATE',
+  MASTER_SERVICES: 'MASTER_SERVICES',
+  MASTER_SERVICE_EDIT: 'MASTER_SERVICE_EDIT',
 };
 
 export const SERVICES = [

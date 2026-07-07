@@ -10,6 +10,7 @@ import { stage } from './scenes/index.js';
 import { askGroq } from './services/groq.js';
 import { resetBooking } from './scenes/helpers.js';
 import { handleStart, handleSettings, handleMasterLogin } from './handlers/commands.js';
+import { showClientBookings, handleBookingCancel, handleBookingConfirm } from './handlers/bookings.js';
 
 const redisClient = createClient({ url: REDIS_URL });
 redisClient.on('error', (err) => console.error('[Redis] Client error:', err.message));
@@ -40,6 +41,10 @@ bot.use(stage.middleware());
 
 bot.start(handleStart);
 bot.command('settings', handleSettings);
+bot.command('my_bookings', showClientBookings);
+
+bot.action(/^booking_confirm:(.+)$/, async (ctx) => handleBookingConfirm(ctx, ctx.match[1]));
+bot.action(/^booking_cancel:(.+)$/, async (ctx) => handleBookingCancel(ctx, ctx.match[1]));
 
 bot.action('master_login', async (ctx) => {
   await ctx.answerCbQuery();
@@ -74,7 +79,7 @@ bot.on(message('text'), async (ctx, next) => {
 bot.action('start_booking', async (ctx) => {
   await ctx.answerCbQuery();
   resetBooking(ctx);
-  return ctx.scene.enter(SCENES.SELECT_SERVICE);
+  return ctx.scene.enter(SCENES.SELECT_MASTER);
 });
 
 bot.catch((err, ctx) => {
