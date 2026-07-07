@@ -244,13 +244,12 @@ function getClientBookings(userId) {
 }
 
 function getReminderBookings() {
-  const now = Date.now();
+  const tz = Session.getScriptTimeZone();
+  const tomorrow = Utilities.formatDate(new Date(Date.now() + 86400000), tz, 'yyyy-MM-dd');
   const bookings = listActiveBookings_().filter((b) => {
     if (String(b.status) !== 'booked') return false;
     if (b.remindedAt) return false;
-    const slotMs = bookingDateTimeMs_(b.date, b.time);
-    const diffHours = (slotMs - now) / 3600000;
-    return diffHours > 22 && diffHours <= 26;
+    return b.date === tomorrow;
   });
   return json({ ok: true, bookings: bookings });
 }
@@ -262,7 +261,7 @@ function getUnconfirmedBookings() {
     if (!b.remindedAt) return false;
     const slotMs = bookingDateTimeMs_(b.date, b.time);
     const diffHours = (slotMs - now) / 3600000;
-    return diffHours <= 2 && diffHours > 0;
+    return diffHours <= 2 && diffHours > -24;
   });
   return json({ ok: true, bookings: bookings });
 }

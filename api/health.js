@@ -1,6 +1,6 @@
 // Quick env check for Vercel (does not expose secret values).
 
-const APP_VERSION = 'ef05230';
+const APP_VERSION = '15e4314';
 
 export default function handler(_req, res) {
   return res.status(200).json({
