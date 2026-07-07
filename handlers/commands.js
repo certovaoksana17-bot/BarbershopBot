@@ -31,6 +31,8 @@ export async function handleStart(ctx) {
   }
 
   resetBooking(ctx);
+  ctx.session.assistantMode = false;
+  ctx.session.assistantHistory = [];
   await ctx.reply(
     'Добро пожаловать в парикмахерскую «Ножницы и Ко»! ✂️\n\n' +
       'Помогу записаться на услугу за пару минут.\n' +
@@ -42,6 +44,17 @@ export async function handleStart(ctx) {
 
 export async function handleSettings(ctx) {
   return replySettingsMenu(ctx);
+}
+
+export async function handleAssistant(ctx) {
+  await ctx.scene.leave().catch(() => {});
+  resetBooking(ctx);
+  ctx.session.assistantMode = true;
+  ctx.session.assistantHistory = [];
+  await ctx.reply(
+    'Режим ассистента включён. Можешь свободно спрашивать про салон, услуги и цены. Для выхода — /start',
+    Markup.removeKeyboard()
+  );
 }
 
 export async function handleMasterLogin(ctx, master) {

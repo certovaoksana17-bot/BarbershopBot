@@ -10,6 +10,7 @@ if (BOT_MODE === 'polling') {
   bot.launch({ dropPendingUpdates: true }, async () => {
     await bot.telegram.setMyCommands([
       { command: 'start', description: 'Записаться на услугу' },
+      { command: 'assistant', description: 'Свободный диалог про салон' },
       { command: 'my_bookings', description: 'Мои записи и отмена' },
       { command: 'settings', description: 'Настройки и вход для мастера' },
     ]);

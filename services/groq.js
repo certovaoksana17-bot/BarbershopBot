@@ -101,6 +101,14 @@ const SERVICES_QUESTION_RE =
   /услуг|цен|стоит|сколько|прайс|цена|что у вас|что есть|меню|прайс-лист/i;
 const UNKNOWN_SERVICE_RE =
   /маникюр|педикюр|брить|бритьё|бритье|детск|классическ|барбер|массаж|эпиляц|перманент|кератин|завивк|гель|балаяж/i;
+const ASSISTANT_SYSTEM_PROMPT =
+  'Ты - Александр администратор парикмахерской SUNSET. ' +
+  'Отвечаешь на вопросы нашего салона, о его услугах и ценах. ' +
+  'Информация о салоне: Парикмахерская SUNSET предоставляет услуги стрижек мужских и женских от 1200 рублей, ' +
+  'окрашивание от 2500руб, укладки и прически от 1000 руб. ' +
+  'Отвечай кратко, дружелюбно, на ты. ' +
+  'Если вопрос не о салоне, вежливо скажи, что можешь помочь только по теме услуг. ' +
+  'Не придумывай услуги и цены которых нет.';
 
 export function parseGroqResponse(raw) {
   const text = String(raw || '').trim();
@@ -209,6 +217,36 @@ export async function askGroq(userMessage) {
   } catch (err) {
     console.error('[Groq] API error:', err.message);
     return { intent: 'OTHER', reply: FALLBACK_REPLY };
+  }
+}
+
+export async function askGroqAssistant(history, userMessage) {
+  if (!client) {
+    return 'Ассистент временно недоступен. Попробуй позже.';
+  }
+
+  try {
+    const safeHistory = Array.isArray(history)
+      ? history
+          .filter((item) => item && (item.role === 'user' || item.role === 'assistant') && item.content)
+          .slice(-6)
+      : [];
+
+    const completion = await client.chat.completions.create({
+      model: GROQ_MODEL,
+      messages: [
+        { role: 'system', content: ASSISTANT_SYSTEM_PROMPT },
+        ...safeHistory,
+        { role: 'user', content: userMessage },
+      ],
+      max_tokens: 250,
+      temperature: 0.3,
+    });
+
+    return completion.choices[0]?.message?.content?.trim() || 'Не удалось получить ответ.';
+  } catch (err) {
+    console.error('[Groq] Assistant API error:', err.message);
+    return 'Ассистент временно недоступен. Попробуй позже.';
   }
 }
 

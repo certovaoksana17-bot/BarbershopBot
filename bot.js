@@ -7,9 +7,9 @@ import { createClient } from 'redis';
 import { message } from 'telegraf/filters';
 import { BOT_TOKEN, REDIS_URL, MASTERS, ADMIN_SECRET_CODE, SCENES } from './config.js';
 import { stage } from './scenes/index.js';
-import { askGroq } from './services/groq.js';
+import { askGroq, askGroqAssistant } from './services/groq.js';
 import { resetBooking } from './scenes/helpers.js';
-import { handleStart, handleSettings, handleMasterLogin } from './handlers/commands.js';
+import { handleAssistant, handleStart, handleSettings, handleMasterLogin } from './handlers/commands.js';
 import { showClientBookings, handleBookingCancel, handleBookingConfirm } from './handlers/bookings.js';
 
 const redisClient = createClient({ url: REDIS_URL });
@@ -34,12 +34,13 @@ export const bot = new Telegraf(BOT_TOKEN);
 bot.use(
   session({
     store,
-    defaultSession: () => ({ booking: {}, role: 'client', masterId: null }),
+    defaultSession: () => ({ booking: {}, role: 'client', masterId: null, assistantMode: false, assistantHistory: [] }),
   })
 );
 bot.use(stage.middleware());
 
 bot.start(handleStart);
+bot.command('assistant', handleAssistant);
 bot.command('settings', handleSettings);
 bot.command('my_bookings', showClientBookings);
 
@@ -62,6 +63,21 @@ bot.on(message('text'), async (ctx, next) => {
   if (ctx.scene?.current) return next();
   if (ctx.message.entities?.some((e) => e.type === 'bot_command')) return next();
   await ctx.sendChatAction('typing');
+
+  if (ctx.session.assistantMode) {
+    const userMessage = ctx.message.text.trim();
+    const history = Array.isArray(ctx.session.assistantHistory) ? ctx.session.assistantHistory : [];
+    const reply = await askGroqAssistant(history, userMessage);
+    const nextHistory = [
+      ...history,
+      { role: 'user', content: userMessage },
+      { role: 'assistant', content: reply },
+    ].slice(-6);
+    ctx.session.assistantHistory = nextHistory;
+    await ctx.reply(`🤖 ${reply}`);
+    return;
+  }
+
   const { intent, reply } = await askGroq(ctx.message.text);
   if (intent === 'CANCEL') {
     resetBooking(ctx);
