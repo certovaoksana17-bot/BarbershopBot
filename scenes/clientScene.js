@@ -14,6 +14,7 @@ import {
 } from './helpers.js';
 import {
   isValidName,
+  getNameInputError,
   isValidPhone,
   formatPhoneInput,
   isSlotInPast,
@@ -64,7 +65,8 @@ getNameScene.on(message('text'), async (ctx, next) => {
   const text = ctx.message.text;
   if (text.startsWith('/')) return next();
   if (looksLikeQuestion(text)) return answerWithAi(ctx, 'Напишите ваше имя:');
-  if (!isValidName(text)) return ctx.reply('Введите корректное имя (минимум 2 буквы).');
+  const nameError = getNameInputError(text);
+  if (nameError) return ctx.reply(nameError);
   ctx.session.booking.name = text.trim();
   return ctx.scene.enter(SCENES.GET_SURNAME);
 });
@@ -85,7 +87,8 @@ getSurnameScene.on(message('text'), async (ctx, next) => {
   const text = ctx.message.text;
   if (text.startsWith('/')) return next();
   if (looksLikeQuestion(text)) return answerWithAi(ctx, 'Напишите вашу фамилию:');
-  if (!isValidName(text)) return ctx.reply('Введите корректную фамилию (минимум 2 буквы).');
+  const surnameError = getNameInputError(text, 'фамилию');
+  if (surnameError) return ctx.reply(surnameError);
   ctx.session.booking.surname = text.trim();
   return ctx.scene.enter(SCENES.GET_PHONE);
 });

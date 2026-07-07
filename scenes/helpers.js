@@ -55,10 +55,7 @@ export async function replySettingsMenu(ctx) {
   await ctx.scene.leave().catch(() => {});
   await ctx.reply(
     'Настройки:',
-    Markup.inlineKeyboard([
-      [Markup.button.callback('📝 Новая запись', 'start_booking')],
-      [Markup.button.callback('🔐 Вход для мастера', 'master_login')],
-    ])
+    Markup.inlineKeyboard([[Markup.button.callback('🔐 Вход для мастера', 'master_login')]])
   );
 }
 
