@@ -39,8 +39,14 @@ export function registerAiFallback(scene) {
     if (ctx.message.entities?.some((e) => e.type === 'bot_command')) return next();
     if (text.startsWith('/')) return next();
     await ctx.sendChatAction('typing');
-    const answer = await askGroq(ctx.message.text);
-    await ctx.reply(`🤖 ${answer}`);
+    const { intent, reply } = await askGroq(ctx.message.text);
+    if (intent === 'CANCEL') {
+      resetBooking(ctx);
+      await ctx.scene.leave().catch(() => {});
+      await ctx.reply(reply);
+      return;
+    }
+    await ctx.reply(`🤖 ${reply}`);
     return ctx.scene.reenter();
   });
 }
@@ -58,8 +64,14 @@ export async function replySettingsMenu(ctx) {
 
 export async function answerWithAi(ctx, resumeHint) {
   await ctx.sendChatAction('typing');
-  const answer = await askGroq(ctx.message.text);
-  await ctx.reply(`🤖 ${answer}`);
+  const { intent, reply } = await askGroq(ctx.message.text);
+  if (intent === 'CANCEL') {
+    resetBooking(ctx);
+    await ctx.scene.leave().catch(() => {});
+    await ctx.reply(reply);
+    return;
+  }
+  await ctx.reply(`🤖 ${reply}`);
   await ctx.reply(`Продолжим запись. ${resumeHint}`, restartKeyboard);
 }
 

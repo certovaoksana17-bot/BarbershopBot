@@ -57,8 +57,14 @@ bot.on(message('text'), async (ctx, next) => {
   if (ctx.scene?.current) return next();
   if (ctx.message.entities?.some((e) => e.type === 'bot_command')) return next();
   await ctx.sendChatAction('typing');
-  const answer = await askGroq(ctx.message.text);
-  await ctx.reply(`🤖 ${answer}`);
+  const { intent, reply } = await askGroq(ctx.message.text);
+  if (intent === 'CANCEL') {
+    resetBooking(ctx);
+    await ctx.scene.leave().catch(() => {});
+    await ctx.reply(reply);
+    return;
+  }
+  await ctx.reply(`🤖 ${reply}`);
   await ctx.reply(
     'Хотите записаться?',
     Markup.inlineKeyboard([[Markup.button.callback('📝 Записаться', 'start_booking')]])

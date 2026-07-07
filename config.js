@@ -6,7 +6,7 @@ dotenv.config({ override: true });
 
 export const BOT_TOKEN = process.env.BOT_TOKEN;
 export const GROQ_API_KEY = process.env.GROQ_API_KEY;
-export const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+export const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.1-8b-instant';
 export const SHEETS_WEB_APP_URL = process.env.SHEETS_WEB_APP_URL || process.env.GOOGLE_SHEETS_WEBHOOK_URL;
 export const REDIS_URL = process.env.REDIS_URL;
 export const ADMIN_SECRET_CODE = process.env.ADMIN_SECRET_CODE;
