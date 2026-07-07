@@ -6,6 +6,8 @@
 const SHEET_ID = 'ВАШ_ID_ТАБЛИЦЫ';
 const ORDERS_SHEET = 'Заказы';
 const SERVICES_SHEET = 'Услуги';
+const KNOWLEDGE_SHEET = 'База_знаний';
+const ANALYTICS_SHEET = 'Аналитика';
 const TIME_SLOTS = ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00'];
 const MASTER_SHEET_PREFIX = 'Мастер_';
 const ORDER_HEADERS = [
@@ -13,6 +15,8 @@ const ORDER_HEADERS = [
   'userId', 'bookingId', 'status', 'remindedAt', 'confirmedAt',
 ];
 const SERVICE_HEADERS = ['masterName', 'serviceId', 'name', 'price', 'active'];
+const KNOWLEDGE_HEADERS = ['section', 'content', 'active', 'sortOrder'];
+const ANALYTICS_HEADERS = ['createdAt', 'eventType', 'userId', 'language', 'message', 'reply', 'intent', 'result', 'meta'];
 const DEFAULT_SERVICES = [
   { id: 'haircut_m', name: 'Мужская стрижка', price: 1200 },
   { id: 'haircut_f', name: 'Женская стрижка', price: 1800 },
@@ -21,6 +25,18 @@ const DEFAULT_SERVICES = [
   { id: 'styling', name: 'Укладка', price: 1000 },
 ];
 const DEFAULT_MASTERS = ['Анна', 'Иван', 'Оксана'];
+const DEFAULT_KNOWLEDGE_ROWS = [
+  ['О салоне', 'Наш салон помогает быстро записаться на популярные услуги по волосам и уходу за образом. Основной фокус — аккуратные мужские и женские стрижки, окрашивание, моделирование бороды, укладки и прически.', 'true', 10],
+  ['Как мы работаем', 'Запись проходит в несколько шагов: клиент выбирает мастера, затем услугу, оставляет имя и телефон, после чего выбирает свободное время. После подтверждения запись попадает в расписание мастера.', 'true', 20],
+  ['График работы', 'График работы и свободные окна лучше всего смотреть через запись в боте: он показывает актуальные доступные слоты по мастерам.', 'true', 30],
+  ['Оплата', 'Стоимость зависит от выбранной услуги и может уточняться до визита. Если нужен более точный расчёт по сложной услуге, лучше уточнить детали заранее.', 'true', 40],
+  ['FAQ', 'Какие услуги есть в салоне? В салоне доступны мужские и женские стрижки, окрашивание, моделирование бороды, укладки и прически.', 'true', 50],
+  ['FAQ', 'Как записаться? Записаться можно через бота: выбрать мастера, услугу, оставить имя и телефон, а потом подтвердить удобное время.', 'true', 60],
+  ['FAQ', 'Можно ли отменить запись? Да, отмена доступна заранее через бот. Отменить запись можно не позднее чем за 2 часа до начала услуги.', 'true', 70],
+  ['FAQ', 'Придёт ли напоминание о записи? Да, перед визитом клиенту может приходить напоминание с просьбой подтвердить запись.', 'true', 80],
+  ['FAQ', 'Что будет, если не подтвердить запись? Если запись не подтверждена вовремя, слот может быть освобождён.', 'true', 90],
+  ['FAQ', 'Почему бот просит телефон? Телефон нужен для подтверждения записи и удобной связи по визиту.', 'true', 100],
+];
 
 function doGet(e) {
   const action = (e.parameter && e.parameter.action) || 'health';
@@ -44,6 +60,7 @@ function routeAction_(action, params) {
   if (action === 'get_schedule') return getSchedule(params.masterName);
   if (action === 'get_today_bookings') return getTodayBookings(params.masterName);
   if (action === 'get_services') return getServices(params.masterName);
+  if (action === 'get_knowledge') return getKnowledge();
   if (action === 'get_client_bookings') return getClientBookings(params.userId);
   if (action === 'get_reminder_bookings') return getReminderBookings();
   if (action === 'get_unconfirmed_bookings') return getUnconfirmedBookings();
@@ -55,6 +72,7 @@ function routeAction_(action, params) {
   if (action === 'confirm_booking') return confirmBooking(params);
   if (action === 'release_booking') return releaseBooking(params);
   if (action === 'mark_reminder_sent') return markReminderSentAction_(params);
+  if (action === 'log_assistant_event') return logAssistantEvent(params);
   return json({ ok: false, message: 'Unknown action' });
 }
 
@@ -199,6 +217,48 @@ function getServices(masterName) {
     });
   }
   return json({ ok: true, services: services });
+}
+
+function getKnowledge() {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  const sheet = getOrCreateKnowledgeSheet(ss);
+  seedDefaultKnowledgeIfEmpty_(sheet);
+  const rows = sheet.getDataRange().getValues();
+  const items = [];
+  for (let i = 1; i < rows.length; i++) {
+    const active = String(rows[i][2] || 'true').toLowerCase() !== 'false';
+    if (!active) continue;
+    items.push({
+      section: String(rows[i][0] || '').trim(),
+      content: String(rows[i][1] || '').trim(),
+      sortOrder: Number(rows[i][3]) || i,
+    });
+  }
+  items.sort(function(a, b) { return a.sortOrder - b.sortOrder; });
+  const knowledge = items
+    .map(function(item) {
+      return item.section ? '## ' + item.section + '\n' + item.content : item.content;
+    })
+    .filter(String)
+    .join('\n\n');
+  return json({ ok: true, knowledge: knowledge, items: items });
+}
+
+function logAssistantEvent(payload) {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  const sheet = getOrCreateAnalyticsSheet(ss);
+  appendAnalyticsRow_(sheet, {
+    createdAt: new Date(),
+    eventType: payload.eventType || 'assistant_message',
+    userId: payload.userId || '',
+    language: payload.language || '',
+    message: payload.message || '',
+    reply: payload.reply || '',
+    intent: payload.intent || '',
+    result: payload.result || '',
+    meta: payload.meta || '',
+  });
+  return json({ ok: true });
 }
 
 function saveService(payload) {
@@ -466,6 +526,24 @@ function getOrCreateServicesSheet(ss) {
   return sheet;
 }
 
+function getOrCreateKnowledgeSheet(ss) {
+  let sheet = ss.getSheetByName(KNOWLEDGE_SHEET);
+  if (!sheet) {
+    sheet = ss.insertSheet(KNOWLEDGE_SHEET);
+    sheet.appendRow(KNOWLEDGE_HEADERS);
+  }
+  return sheet;
+}
+
+function getOrCreateAnalyticsSheet(ss) {
+  let sheet = ss.getSheetByName(ANALYTICS_SHEET);
+  if (!sheet) {
+    sheet = ss.insertSheet(ANALYTICS_SHEET);
+    sheet.appendRow(ANALYTICS_HEADERS);
+  }
+  return sheet;
+}
+
 function seedDefaultServicesIfEmpty_(sheet, masterName) {
   const rows = sheet.getDataRange().getValues();
   for (let i = 1; i < rows.length; i++) {
@@ -474,6 +552,21 @@ function seedDefaultServicesIfEmpty_(sheet, masterName) {
   DEFAULT_SERVICES.forEach((service) => {
     sheet.appendRow([masterName, service.id, service.name, service.price, 'true']);
   });
+}
+
+function seedDefaultKnowledgeIfEmpty_(sheet) {
+  if (sheet.getLastRow() > 1) return;
+  DEFAULT_KNOWLEDGE_ROWS.forEach(function(row) {
+    sheet.appendRow(row);
+  });
+}
+
+function appendAnalyticsRow_(sheet, rowObj) {
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(String);
+  const row = headers.map(function(header) {
+    return rowObj[header] !== undefined ? rowObj[header] : '';
+  });
+  sheet.appendRow(row);
 }
 
 function getMasterSheet(ss, masterName) {
@@ -574,11 +667,20 @@ function createMasterSheets() {
   });
   getOrCreateOrdersSheet(ss);
   const services = getOrCreateServicesSheet(ss);
+  const knowledge = getOrCreateKnowledgeSheet(ss);
+  getOrCreateAnalyticsSheet(ss);
   DEFAULT_MASTERS.forEach((name) => seedDefaultServicesIfEmpty_(services, name));
+  seedDefaultKnowledgeIfEmpty_(knowledge);
 }
 
 function initServicesSheet() {
   const ss = SpreadsheetApp.openById(SHEET_ID);
   const sheet = getOrCreateServicesSheet(ss);
   DEFAULT_MASTERS.forEach((name) => seedDefaultServicesIfEmpty_(sheet, name));
+}
+
+function initKnowledgeSheet() {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  const sheet = getOrCreateKnowledgeSheet(ss);
+  seedDefaultKnowledgeIfEmpty_(sheet);
 }

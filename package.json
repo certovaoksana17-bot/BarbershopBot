@@ -7,7 +7,10 @@
   "scripts": {
     "start": "node index.js",
     "dev": "node --watch index.js",
-    "set-webhook": "node scripts/set-webhook.js"
+    "set-webhook": "node scripts/set-webhook.js",
+    "test": "node scripts/test-smoke.js",
+    "test:assistant": "node scripts/test-assistant-rag.js",
+    "test:intent": "node scripts/test-assistant-booking-intent.js"
   },
   "engines": {
     "node": ">=18"

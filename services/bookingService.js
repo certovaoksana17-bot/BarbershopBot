@@ -4,6 +4,8 @@
 import { SHEETS_WEB_APP_URL } from '../config.js';
 import { formatSlotLabel, normalizeTime, isSlotInPast } from '../utils/validation.js';
 
+const SHEETS_TIMEOUT_MS = Number(process.env.SHEETS_TIMEOUT_MS || 12000);
+
 class SheetsError extends Error {
   constructor(message, { retryable = true } = {}) {
     super(message);
@@ -19,21 +21,26 @@ async function callSheets(payload, { method = 'POST' } = {}) {
 
   let response;
   try {
+    const signal = AbortSignal.timeout(SHEETS_TIMEOUT_MS);
     if (method === 'GET') {
       const url = new URL(SHEETS_WEB_APP_URL);
       Object.entries(payload).forEach(([key, value]) => url.searchParams.set(key, String(value)));
       url.searchParams.set('_ts', String(Date.now()));
-      response = await fetch(url.toString(), { method: 'GET', redirect: 'follow' });
+      response = await fetch(url.toString(), { method: 'GET', redirect: 'follow', signal });
     } else {
       response = await fetch(SHEETS_WEB_APP_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
         redirect: 'follow',
+        signal,
       });
     }
   } catch (err) {
     console.error('[Sheets] Network error:', err.message);
+    if (err.name === 'TimeoutError') {
+      throw new SheetsError('Сервис записи отвечает слишком долго. Попробуйте ещё раз через минуту.');
+    }
     throw new SheetsError('Сервис записи временно недоступен. Попробуйте через минуту.');
   }
 
@@ -82,6 +89,28 @@ export async function sendBookingToSheets(data) {
 export async function getMasterServicesFromSheets(masterName) {
   const result = await callSheets({ action: 'get_services', masterName }, { method: 'GET' });
   return result.services || [];
+}
+
+export async function getKnowledgeFromSheets() {
+  const result = await callSheets({ action: 'get_knowledge' }, { method: 'GET' });
+  return {
+    knowledge: String(result.knowledge || ''),
+    items: Array.isArray(result.items) ? result.items : [],
+  };
+}
+
+export async function logAssistantEvent(event) {
+  return callSheets({
+    action: 'log_assistant_event',
+    eventType: event.eventType,
+    userId: event.userId,
+    language: event.language,
+    message: event.message,
+    reply: event.reply,
+    intent: event.intent,
+    result: event.result,
+    meta: typeof event.meta === 'string' ? event.meta : JSON.stringify(event.meta || {}),
+  });
 }
 
 export async function saveMasterService({ masterName, serviceId, name, price }) {

@@ -30,7 +30,11 @@ registerGlobalCommands(selectMasterScene);
 selectMasterScene.enter(async (ctx) => {
   ctx.session.booking = ctx.session.booking || {};
   ctx.session.role = 'client';
-  await ctx.reply('Выберите мастера 👇', restartKeyboard);
+  if (ctx.session.booking.service) {
+    await ctx.reply(`Для услуги «${ctx.session.booking.service}» выбери мастера 👇`, restartKeyboard);
+  } else {
+    await ctx.reply('Выберите мастера 👇', restartKeyboard);
+  }
   await ctx.reply(
     'Наши мастера:',
     Markup.inlineKeyboard([
@@ -68,6 +72,17 @@ selectServiceScene.enter(async (ctx) => {
   if (!services.length) {
     await ctx.reply('У этого мастера пока нет услуг. Выберите другого мастера.');
     return ctx.scene.enter(SCENES.SELECT_MASTER);
+  }
+
+  const preselectedServiceId = ctx.session.booking?.serviceId;
+  if (preselectedServiceId) {
+    const preselectedService = services.find((service) => service.id === preselectedServiceId);
+    if (preselectedService) {
+      ctx.session.booking.service = preselectedService.name;
+      ctx.session.booking.price = preselectedService.price;
+      await ctx.reply(`Услуга уже выбрана: ${preselectedService.name} — ${preselectedService.price} ₽ ✂️`);
+      return ctx.scene.enter(SCENES.GET_NAME);
+    }
   }
 
   await ctx.reply('Выберите услугу 👇', restartKeyboard);

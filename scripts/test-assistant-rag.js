@@ -1,11 +1,12 @@
 // RAG assistant smoke test — run: node scripts/test-assistant-rag.js
 import { askGroqAssistant } from '../services/groq.js';
-import { loadKnowledgeBase } from '../services/knowledgeService.js';
+import { loadKnowledgeBundle } from '../services/knowledgeService.js';
 import { GROQ_MODEL } from '../config.js';
 
-const knowledge = await loadKnowledgeBase();
+const knowledge = await loadKnowledgeBundle();
 console.log(`[test-assistant-rag] model: ${GROQ_MODEL}`);
-console.log(`[test-assistant-rag] knowledge chars: ${knowledge.length}\n`);
+console.log(`[test-assistant-rag] knowledge source: ${knowledge.source}`);
+console.log(`[test-assistant-rag] knowledge chars: ${knowledge.text.length}\n`);
 
 const cases = [
   'Сколько стоит мужская стрижка?',

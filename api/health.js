@@ -1,6 +1,6 @@
 // Quick env check for Vercel (does not expose secret values).
 
-const APP_VERSION = '338eb7c-assistant';
+const APP_VERSION = 'bot-improvements-sheets-rag';
 
 export default function handler(_req, res) {
   return res.status(200).json({

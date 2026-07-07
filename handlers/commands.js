@@ -3,6 +3,7 @@
 import { Markup } from 'telegraf';
 import { SCENES, MASTERS, findMasterBySecret, ADMIN_SECRET_CODE } from '../config.js';
 import { resetBooking, replySettingsMenu } from '../scenes/helpers.js';
+import { getAssistantQuickKeyboard } from '../services/assistantService.js';
 
 function tryMasterLogin(code) {
   const normalized = String(code || '').trim();
@@ -37,7 +38,7 @@ export async function handleStart(ctx) {
     'Добро пожаловать в парикмахерскую «Ножницы и Ко»! ✂️\n\n' +
       'Сейчас работает режим ассистента: просто напиши вопрос сообщением, и я отвечу по базе знаний.\n' +
       'Если хочешь оформить запись, нажми кнопку ниже.',
-    Markup.inlineKeyboard([[Markup.button.callback('📝 Записаться', 'start_booking')]])
+    getAssistantQuickKeyboard()
   );
 }
 
@@ -52,7 +53,7 @@ export async function handleAssistant(ctx) {
   ctx.session.assistantHistory = [];
   await ctx.reply(
     'Режим ассистента включён. Можешь свободно спрашивать про салон, услуги и цены. Для выхода — /start',
-    Markup.removeKeyboard()
+    getAssistantQuickKeyboard()
   );
 }
 

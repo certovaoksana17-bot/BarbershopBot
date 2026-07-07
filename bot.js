@@ -11,6 +11,14 @@ import { askGroq, askGroqAssistant } from './services/groq.js';
 import { resetBooking } from './scenes/helpers.js';
 import { handleAssistant, handleStart, handleSettings, handleMasterLogin } from './handlers/commands.js';
 import { showClientBookings, handleBookingCancel, handleBookingConfirm } from './handlers/bookings.js';
+import {
+  detectBookingIntent,
+  getAssistantPromptMessage,
+  getAssistantQuickKeyboard,
+  logAssistantEventSafe,
+  startBookingFromIntent,
+} from './services/assistantService.js';
+import { notifyAdminAboutError } from './services/notificationService.js';
 
 const redisClient = createClient({ url: REDIS_URL });
 redisClient.on('error', (err) => console.error('[Redis] Client error:', err.message));
@@ -47,6 +55,34 @@ bot.hears(/^\/assistant(@\w+)?$/i, handleAssistant);
 
 bot.action(/^booking_confirm:(.+)$/, async (ctx) => handleBookingConfirm(ctx, ctx.match[1]));
 bot.action(/^booking_cancel:(.+)$/, async (ctx) => handleBookingCancel(ctx, ctx.match[1]));
+bot.action('assistant_my_bookings', async (ctx) => {
+  await ctx.answerCbQuery();
+  return showClientBookings(ctx);
+});
+bot.action(/^assistant_prompt:(.+)$/, async (ctx) => {
+  await ctx.answerCbQuery();
+  const promptMessage = getAssistantPromptMessage(ctx.match[1]);
+  if (!promptMessage) return ctx.reply('Подсказка больше недоступна.');
+  const history = Array.isArray(ctx.session.assistantHistory) ? ctx.session.assistantHistory : [];
+  const reply = await askGroqAssistant(history, promptMessage);
+  ctx.session.assistantMode = true;
+  ctx.session.assistantHistory = [
+    ...history,
+    { role: 'user', content: promptMessage },
+    { role: 'assistant', content: reply },
+  ].slice(-6);
+  await logAssistantEventSafe({
+    eventType: 'assistant_quick_prompt',
+    userId: ctx.from?.id,
+    language: /[A-Za-z]/.test(promptMessage) ? 'en' : 'ru',
+    message: promptMessage,
+    reply,
+    intent: 'quick_prompt',
+    result: 'answered',
+    meta: { source: ctx.match[1] },
+  }, ctx.telegram);
+  await ctx.reply(`🤖 ${reply}`, getAssistantQuickKeyboard());
+});
 
 bot.action('master_login', async (ctx) => {
   await ctx.answerCbQuery();
@@ -68,6 +104,24 @@ bot.on(message('text'), async (ctx, next) => {
   if (ctx.session.assistantMode) {
     const userMessage = ctx.message.text.trim();
     const history = Array.isArray(ctx.session.assistantHistory) ? ctx.session.assistantHistory : [];
+    const bookingIntent = await detectBookingIntent(userMessage);
+    if (bookingIntent?.wantsBooking) {
+      await logAssistantEventSafe({
+        eventType: 'assistant_booking_intent',
+        userId: ctx.from?.id,
+        language: /[A-Za-z]/.test(userMessage) ? 'en' : 'ru',
+        message: userMessage,
+        reply: '',
+        intent: 'booking',
+        result: bookingIntent.master || bookingIntent.service ? 'prefill' : 'start_booking',
+        meta: {
+          master: bookingIntent.master?.name || '',
+          service: bookingIntent.service?.name || '',
+        },
+      }, ctx.telegram);
+      return startBookingFromIntent(ctx, bookingIntent);
+    }
+
     const reply = await askGroqAssistant(history, userMessage);
     const nextHistory = [
       ...history,
@@ -75,7 +129,17 @@ bot.on(message('text'), async (ctx, next) => {
       { role: 'assistant', content: reply },
     ].slice(-6);
     ctx.session.assistantHistory = nextHistory;
-    await ctx.reply(`🤖 ${reply}`);
+    await logAssistantEventSafe({
+      eventType: 'assistant_message',
+      userId: ctx.from?.id,
+      language: /[A-Za-z]/.test(userMessage) ? 'en' : 'ru',
+      message: userMessage,
+      reply,
+      intent: 'assistant',
+      result: 'answered',
+      meta: {},
+    }, ctx.telegram);
+    await ctx.reply(`🤖 ${reply}`, getAssistantQuickKeyboard());
     return;
   }
 
@@ -103,5 +167,13 @@ bot.action('start_booking', async (ctx) => {
 
 bot.catch((err, ctx) => {
   console.error(`[Bot] Error update ${ctx.update?.update_id}:`, err);
+  notifyAdminAboutError(
+    {
+      area: 'bot_update',
+      error: err.message,
+      meta: `update:${ctx.update?.update_id || 'unknown'}`,
+    },
+    ctx.telegram
+  ).catch(() => {});
   if (process.env.BOT_MODE !== 'polling') throw err;
 });

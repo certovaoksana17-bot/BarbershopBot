@@ -10,6 +10,7 @@ export const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.1-8b-instant';
 export const SHEETS_WEB_APP_URL = process.env.SHEETS_WEB_APP_URL || process.env.GOOGLE_SHEETS_WEBHOOK_URL;
 export const REDIS_URL = process.env.REDIS_URL;
 export const ADMIN_SECRET_CODE = process.env.ADMIN_SECRET_CODE;
+export const ADMIN_CHAT_ID = String(process.env.ADMIN_CHAT_ID || '').trim();
 
 export const WEBHOOK_PATH = process.env.WEBHOOK_PATH || '/api/webhook';
 export const WEBHOOK_DOMAIN = process.env.WEBHOOK_DOMAIN || process.env.VERCEL_URL;

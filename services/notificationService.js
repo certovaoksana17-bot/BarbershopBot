@@ -1,6 +1,6 @@
 // Telegram notifications for masters and clients.
 
-import { findMasterByName } from '../config.js';
+import { ADMIN_CHAT_ID, findMasterByName } from '../config.js';
 import { formatSlotLabel } from '../utils/validation.js';
 
 export async function notifyMasterAboutBooking(booking, telegram) {
@@ -59,6 +59,16 @@ export async function notifyClientReleased(booking, telegram) {
     `Запись на ${booking.label || formatSlotLabel(booking.date, booking.time)} ` +
     `к мастеру ${booking.masterName} была отменена — слот не подтверждён вовремя.`;
   await safeSend(telegram, booking.userId, text);
+}
+
+export async function notifyAdminAboutError(details, telegram) {
+  if (!ADMIN_CHAT_ID) return;
+  const text =
+    `⚠️ Ошибка бота\n` +
+    `Зона: ${details.area || 'unknown'}\n` +
+    `Ошибка: ${details.error || 'unknown'}\n` +
+    `${details.meta ? `Контекст: ${details.meta}` : ''}`;
+  await safeSend(telegram, ADMIN_CHAT_ID, text.trim());
 }
 
 async function safeSend(telegram, chatId, text) {
