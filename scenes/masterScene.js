@@ -28,14 +28,37 @@ export const masterMenuScene = new Scenes.BaseScene(SCENES.MASTER_MENU);
 registerGlobalCommands(masterMenuScene);
 
 const masterMenuKeyboard = Markup.keyboard([
-  ['📅 Моё расписание', '🏖 Отметить выходной'],
-  ['💰 Мои услуги', '📋 Записи на сегодня'],
+  ['📅 Моё расписание'],
+  ['🏖 Отметить выходной'],
+  ['💰 Мои услуги'],
+  ['📋 Записи на сегодня'],
   ['🚪 Выйти'],
 ]).resize();
 
+const masterMenuInline = Markup.inlineKeyboard([
+  [Markup.button.callback('💰 Мои услуги', 'msvc_open')],
+]);
+
+async function exitMasterCabinet(ctx) {
+  ctx.session.role = 'client';
+  ctx.session.masterId = null;
+  await ctx.scene.leave().catch(() => {});
+  await ctx.reply('Вы вышли из кабинета мастера. Для записи — /start', Markup.removeKeyboard());
+}
+
 masterMenuScene.enter(async (ctx) => {
   const master = findMasterById(ctx.session.masterId);
-  await ctx.reply(`Кабинет мастера: ${master?.name || 'Мастер'}`, masterMenuKeyboard);
+  await ctx.reply(
+    `Кабинет мастера: ${master?.name || 'Мастер'}\n\n` +
+      'Меню:\n' +
+      '• 📅 Моё расписание\n' +
+      '• 🏖 Отметить выходной\n' +
+      '• 💰 Мои услуги — цены и список услуг\n' +
+      '• 📋 Записи на сегодня\n' +
+      '• 🚪 Выйти',
+    masterMenuKeyboard
+  );
+  await ctx.reply('Или нажмите кнопку ниже:', masterMenuInline);
 });
 
 masterMenuScene.hears('📅 Моё расписание', async (ctx) => {
@@ -89,12 +112,7 @@ masterMenuScene.hears('📋 Записи на сегодня', async (ctx) => {
   }
 });
 
-masterMenuScene.hears('🚪 Выйти', async (ctx) => {
-  ctx.session.role = 'client';
-  ctx.session.masterId = null;
-  await ctx.reply('Вы вышли из кабинета мастера. Для записи — /start');
-  return ctx.scene.leave();
-});
+masterMenuScene.hears('🚪 Выйти', exitMasterCabinet);
 
 // --- MASTER_VACATION_DATE ---
 export const masterVacationScene = new Scenes.BaseScene(SCENES.MASTER_VACATION_DATE);
@@ -188,6 +206,11 @@ async function showMasterServices(ctx) {
 }
 
 masterMenuScene.hears('💰 Мои услуги', async (ctx) => showMasterServices(ctx));
+
+masterMenuScene.action('msvc_open', async (ctx) => {
+  await ctx.answerCbQuery();
+  return showMasterServices(ctx);
+});
 
 masterMenuScene.action('msvc_add', async (ctx) => {
   await ctx.answerCbQuery();

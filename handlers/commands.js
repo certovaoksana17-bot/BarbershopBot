@@ -15,6 +15,7 @@ async function enterMasterCabinet(ctx, master) {
   ctx.session.role = 'master';
   ctx.session.masterId = master.id;
   await ctx.scene.leave().catch(() => {});
+  await ctx.reply('Открываю кабинет мастера...', Markup.removeKeyboard());
   return ctx.scene.enter(SCENES.MASTER_MENU);
 }
 
@@ -33,7 +34,8 @@ export async function handleStart(ctx) {
   await ctx.reply(
     'Добро пожаловать в парикмахерскую «Ножницы и Ко»! ✂️\n\n' +
       'Помогу записаться на услугу за пару минут.\n' +
-      'Сначала выберите мастера — если есть вопрос, просто напишите его в чат.'
+      'Сначала выберите мастера — если есть вопрос, просто напишите его в чат.',
+    Markup.removeKeyboard()
   );
   return ctx.scene.enter(SCENES.SELECT_MASTER);
 }
