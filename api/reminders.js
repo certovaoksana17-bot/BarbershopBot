@@ -1,4 +1,4 @@
-// Cron job: 24h reminders and auto-release unconfirmed slots.
+﻿// Cron job: 24h reminders and auto-release unconfirmed slots.
 
 import { Markup } from 'telegraf';
 import { CRON_SECRET } from '../config.js';
@@ -24,6 +24,9 @@ function isAuthorized(req) {
 export default async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+  if (!CRON_SECRET) {
+    return res.status(503).json({ error: 'CRON_SECRET is not configured' });
   }
   if (!isAuthorized(req)) {
     return res.status(401).json({ error: 'Unauthorized' });
@@ -72,3 +75,6 @@ async function processAutoRelease() {
   }
   return count;
 }
+
+
+

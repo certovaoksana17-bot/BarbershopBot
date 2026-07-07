@@ -1,6 +1,13 @@
-// Vercel serverless webhook endpoint.
+﻿// Vercel serverless webhook endpoint.
 
 import { bot, ensureRedisReady } from '../bot.js';
+import { WEBHOOK_SECRET } from '../config.js';
+
+function isValidWebhookSecret(req) {
+  if (!WEBHOOK_SECRET) return true;
+  const header = req.headers['x-telegram-bot-api-secret-token'];
+  return header === WEBHOOK_SECRET;
+}
 
 function parseUpdateBody(body) {
   if (!body) return null;
@@ -15,6 +22,9 @@ export default async function handler(req, res) {
   }
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+  if (!isValidWebhookSecret(req)) {
+    return res.status(401).json({ error: 'Invalid webhook secret' });
   }
 
   try {

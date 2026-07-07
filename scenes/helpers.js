@@ -1,4 +1,4 @@
-// Shared scene helpers: restart, AI fallback, session reset.
+﻿// Shared scene helpers: restart, AI fallback, session reset.
 
 import { Markup } from 'telegraf';
 import { message } from 'telegraf/filters';
@@ -27,7 +27,7 @@ export function registerRestart(scene) {
     if (ctx.callbackQuery) await ctx.answerCbQuery();
     resetBooking(ctx);
     await ctx.reply('Хорошо, начнём запись сначала! 🔄');
-    return ctx.scene.enter(SCENES.SELECT_SERVICE);
+    return ctx.scene.enter(SCENES.SELECT_MASTER);
   };
   scene.hears(RESTART_TEXT, restart);
   scene.command('reset', restart);
@@ -74,3 +74,4 @@ export async function answerWithAi(ctx, resumeHint) {
 }
 
 export { looksLikeQuestion };
+
